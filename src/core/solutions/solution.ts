@@ -56,5 +56,16 @@ export class SolutionService{
   if(tableNames.some(n=>!/^[a-zA-Z0-9_]+$/.test(n)))throw new AppError('INVALID_SCHEMA','Logical name không hợp lệ.');
   await this.client.request(plan.request.target,'PublishXml',{method:'POST',body:{ParameterXml:`<importexportxml><entities>${tableNames.map(n=>`<entity>${n}</entity>`).join('')}</entities></importexportxml>`}});
  }
- async cleanup(plan:TransferPlan,job:Job){if(!job.sourceSolutionId||!job.solutionName?.startsWith('phtransfer_'))return;const solution=await this.client.request<{uniquename:string}>(plan.request.source,`solutions(${job.sourceSolutionId})?$select=uniquename`);if(solution.uniquename!==job.solutionName)throw new AppError('CLEANUP_MISMATCH','Không xóa Solution không thuộc job.');await this.client.request(plan.request.source,`solutions(${job.sourceSolutionId})`,{method:'DELETE'});}
+ async cleanup(plan:TransferPlan,job:Job){
+  if(!job.sourceSolutionId&&!job.solutionName)return;
+  if(!job.schemaImported||!job.sourceSolutionId||job.solutionName!=='phtransfer_'+job.id.replaceAll('-','')||!/^phtransfer_[a-fA-F0-9]{32}$/.test(job.solutionName))throw new AppError('CLEANUP_MISMATCH','Không xác nhận được Solution tạm thuộc job đã import.');
+  const containers:{env:EnvironmentId;id:string}[]=[];
+  for(const env of [plan.request.source,plan.request.target]){
+   const matches:{solutionid:string;uniquename:string;ismanaged:boolean}[]=await this.client.all<{solutionid:string;uniquename:string;ismanaged:boolean}>(env,`solutions?$select=solutionid,uniquename,ismanaged&$filter=uniquename eq '${job.solutionName}'&$top=2`);
+   if(!matches.length)continue;
+   const solution=matches[0];if(matches.length!==1||solution.uniquename!==job.solutionName||solution.ismanaged!==false||!solution.solutionid||(env===plan.request.source&&solution.solutionid!==job.sourceSolutionId))throw new AppError('CLEANUP_MISMATCH','Chỉ xóa container unmanaged khớp chính xác Solution tạm của job.');
+   containers.push({env,id:solution.solutionid});
+  }
+  for(const {env,id} of containers){try{await this.client.request(env,`solutions(${id})`,{method:'DELETE'});}catch(error){if(!(error instanceof AppError&&error.code==='NOT_FOUND'))throw error;}}
+ }
 }

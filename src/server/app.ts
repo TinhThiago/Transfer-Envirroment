@@ -63,8 +63,8 @@ export function buildApp({config,store=new JobStore(),client=new MicrosoftClient
   const {id}=z.object({id:guidSchema}).parse(req.params);const job=store.getJob(id);if(!job)throw new AppError('JOB_NOT_FOUND','Không tìm thấy job.',404);
   if(!job.schemaImported||!job.solutionName||!/^[a-zA-Z0-9_]+$/.test(job.solutionName))throw new AppError('SOLUTION_NOT_IMPORTED','Job chưa xác nhận nhập Solution tại đích.',404);
   // Resolve by unique name at the destination: its ID can differ from the source.
-  const solutions=await client.all<{solutionid:string}>(job.target,`solutions?$select=solutionid&$filter=uniquename eq '${job.solutionName}'&$top=2`);
-  if(solutions.length!==1)throw new AppError('SOLUTION_NOT_FOUND','Không tìm thấy duy nhất Solution của job tại môi trường đích.',404);
+  let solutions=await client.all<{solutionid:string}>(job.target,`solutions?$select=solutionid&$filter=uniquename eq '${job.solutionName}'&$top=2`);
+  if(!solutions.length)solutions=await client.all<{solutionid:string}>(job.target,"solutions?$select=solutionid&$filter=uniquename eq 'Default'&$top=2");if(solutions.length!==1)throw new AppError('SOLUTION_NOT_FOUND','Không tìm thấy duy nhất Solution của job tại môi trường đích.',404);
   const solutionId=encodeURIComponent(solutions[0].solutionid);let environmentId:string|undefined;
   try{environmentId=(await client.request<{Detail?:{EnvironmentId?:string}}>(job.target,"RetrieveCurrentOrganization(AccessType=@p1)?@p1=Microsoft.Dynamics.CRM.EndpointAccessType'Default'")).Detail?.EnvironmentId;}catch{}
   return reply.redirect(environmentId?`https://make.powerapps.com/environments/${encodeURIComponent(environmentId)}/solutions/${solutionId}`:`${environments[job.target].url}/tools/solution/edit.aspx?id=${solutionId}`);

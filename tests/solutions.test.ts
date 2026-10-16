@@ -37,3 +37,15 @@ it('packages incoming custom lookup and relationship even when the related table
  const service=new SolutionService(client as never);const plan={request:{source:'production',target:'dev'},components:[{id:'table',kind:'table',componentType:1,logicalName:'ph_demo'}]} as never;const job={id:'job',solutionName:'ph_job',sourceSolutionId:'solution'} as Job;
  expect(await service.build(plan,job,()=>{})).toBe('zip');expect(added.map(c=>[c.ComponentId,c.ComponentType])).toEqual([['table',1],['lookup',2],['relationship',10]]);
 });
+it('removes only the exact unmanaged job container in both environments',async()=>{
+ const job={id:'11111111-1111-4111-8111-111111111111',sourceSolutionId:'source',solutionName:'phtransfer_11111111111141118111111111111111',schemaImported:true} as Job;const deleted:string[]=[];
+ const service=new SolutionService({all:async(env:string)=>[{solutionid:env==='dev'?'source':'target',uniquename:job.solutionName,ismanaged:false}],request:async(env:string,path:string,options:{method:string})=>{expect(options.method).toBe('DELETE');deleted.push(env+':'+path)}} as never);
+ await service.cleanup({request:{source:'dev',target:'production'}} as never,job);expect(deleted).toEqual(['dev:solutions(source)','production:solutions(target)']);
+});
+it('refuses to delete managed or mismatched solutions and never deletes components',async()=>{
+ const job={id:'11111111-1111-4111-8111-111111111111',sourceSolutionId:'source',solutionName:'phtransfer_11111111111141118111111111111111',schemaImported:true} as Job;let deletes=0;
+ const service=new SolutionService({all:async()=>[{solutionid:'source',uniquename:job.solutionName,ismanaged:true}],request:async()=>{deletes++}} as never);await expect(service.cleanup({request:{source:'dev',target:'production'}} as never,job)).rejects.toMatchObject({code:'CLEANUP_MISMATCH'});expect(deletes).toBe(0);
+});
+it('treats absent containers as already cleaned',async()=>{
+ const job={id:'11111111-1111-4111-8111-111111111111',sourceSolutionId:'source',solutionName:'phtransfer_11111111111141118111111111111111',schemaImported:true} as Job;const service=new SolutionService({all:async()=>[],request:async()=>{throw Error('must not delete')}} as never);await expect(service.cleanup({request:{source:'dev',target:'production'}} as never,job)).resolves.toBeUndefined();
+});
