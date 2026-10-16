@@ -12,6 +12,7 @@
     "start": "tsx src/server/index.ts"
   },
   "dependencies": {
+    "@azure/msal-browser": "^5.25.1",
     "@fastify/static": "^10.1.6",
     "@xmldom/xmldom": "^0.9.12",
     "fastify": "^5.12.7",
@@ -26,6 +27,7 @@
     "@types/node": "^24.0.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
+    "fake-indexeddb": "^6.2.5",
     "jsdom": "^26.1.0",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0",

@@ -2,6 +2,8 @@
 
 App web tiếng Việt chuyển Table, Column và Power Automate Cloud flow giữa:
 
+**GitHub Pages không cần backend:** workflow hiện build chế độ `browser`, đăng nhập Microsoft bằng MSAL/PKCE. Không cần `VITE_API_BASE_URL` hay client secret cho Pages. Xem [cấu hình Pages và Microsoft Entra](docs/github-pages.md) trước khi đăng nhập. Phần hướng dẫn secret bên dưới chỉ áp dụng chế độ backend/local cũ.
+
 - Dev: `https://phuochungdev.crm5.dynamics.com`
 - Production: `https://phuochung1.crm5.dynamics.com`
 

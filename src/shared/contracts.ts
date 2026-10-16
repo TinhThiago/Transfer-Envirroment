@@ -15,6 +15,6 @@ export interface ReferenceMapping{sourceTable:string;sourceId:string;targetId:st
 export interface DataPreflight{supported:boolean;blockers:string[];references:{table:string;id:string;displayName:string}[];mappings:ReferenceMapping[];counts:Record<string,number>}
 export interface FlowMappings{connections:Record<string,string>;variables:Record<string,string>}
 export type JobStatus='queued'|'checking'|'awaiting-input'|'exporting'|'importing'|'copying-data'|'verifying'|'succeeded'|'partial'|'failed'|'cancelled';
-export interface Job{id:string;planId:string;planHash:string;target:EnvironmentId;status:JobStatus;step:string;createdAt:string;updatedAt:string;counts:Record<string,number>;error?:{code:string;message:string};importId?:string;importRejected?:boolean;asyncId?:string;solutionName?:string;sourceSolutionId?:string;cancelRequested?:boolean;schemaImported?:boolean;warnings:string[]}
+export interface Job{id:string;planId:string;planHash:string;target:EnvironmentId;status:JobStatus;step:string;createdAt:string;updatedAt:string;counts:Record<string,number>;error?:{code:string;message:string};importId?:string;importRejected?:boolean;asyncId?:string;solutionName?:string;sourceSolutionId?:string;cancelRequested?:boolean;resumeRequired?:boolean;sessionMappingsRequired?:boolean;schemaImported?:boolean;warnings:string[]}
 export interface Catalog<T>{items:T[];total:number;eligible:number}
 export const terminalStatuses:JobStatus[]=['succeeded','partial','failed','cancelled'];
