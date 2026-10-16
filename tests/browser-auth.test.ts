@@ -16,3 +16,9 @@ it('uses a user gesture for sign-in and clears the account on logout',async()=>{
  let current:typeof account|null=null;const popup=vi.fn(async(_options:{scopes:string[]})=>({account,accessToken:'token'}));const auth=new BrowserAuth({initialize:async()=>{},getActiveAccount:()=>current,getAllAccounts:()=>[],setActiveAccount:(value:typeof current)=>{current=value},loginPopup:popup,logoutPopup:async()=>{}} as never,{...authSettings('https://example.com','/'),tenantId:'tenant'});
  await auth.initialize();expect(auth.getAccount()).toBeNull();await auth.signIn('production');expect(auth.getAccount()?.id).toBe('user');expect(popup.mock.calls[0][0].scopes).toEqual(['https://phuochung1.crm5.dynamics.com/user_impersonation']);await auth.signOut();expect(auth.getAccount()).toBeNull();
 });
+it('uses the confirmed SPA client ID by default',()=>{expect(authSettings('https://example.com','/').clientId).toBe('7c279345-da37-45cc-ab63-70dba694349e');});
+it('overrides a pending popup only on explicit retry',async()=>{
+ const popup=vi.fn().mockRejectedValueOnce({errorCode:'interaction_in_progress'}).mockResolvedValueOnce({account,accessToken:'token'});const auth=new BrowserAuth({getActiveAccount:()=>null,loginPopup:popup,setActiveAccount:()=>{}} as never,{...authSettings('https://example.com','/'),tenantId:'tenant'});
+ await expect(auth.signIn()).rejects.toMatchObject({code:'AUTH_POPUP_PENDING'});expect(popup).toHaveBeenCalledTimes(1);expect(popup.mock.calls[0][0].overrideInteractionInProgress).not.toBe(true);
+ await auth.signIn('dev',true);expect(popup.mock.calls[1][0].overrideInteractionInProgress).toBe(true);
+});

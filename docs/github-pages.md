@@ -58,4 +58,8 @@ Không đặt VITE_API_BASE_URL. Xóa các biến tạm hoặc mở terminal m�
 
 Build/test thành công không đồng nghĩa Entra hoặc quyền user đã được kiểm chứng live. Chỉ kiểm tra WhoAmI/catalog sau khi đăng nhập; không tự chọn dữ liệu Production làm thử nghiệm.
 
-Tài liệu Microsoft: https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/quick-start-js-spa và https://learn.microsoft.com/en-us/entra/msal/javascript/browser/redirect-bridge
+Tài liệu Microsoft: https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/quick-start-js-spa và https://learn.microsoft.com/en-us/entra/msal/javascript/browser/redirect-bridge## Client ID và khôi phục popup
+
+Client ID SPA mặc định: `7c279345-da37-45cc-ab63-70dba694349e`. Nếu GitHub Settings → Secrets and variables → Actions → Variables đang có `VITE_MICROSOFT_CLIENT_ID`, hãy đổi sang ID này hoặc xóa biến để dùng mặc định. Không thay Client ID backend cũ vì đó có thể là application user riêng.
+
+Nếu báo `interaction_in_progress`, bấm **Hủy lượt đăng nhập cũ và thử lại**. Đây là thao tác chủ động hủy yêu cầu popup cũ và mở yêu cầu mới; popup cũ còn mở cần tự đóng. App không tự override khi bắt lỗi và không xóa IndexedDB/lịch sử.

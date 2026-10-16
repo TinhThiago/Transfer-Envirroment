@@ -10,8 +10,8 @@ export class BrowserAuth{
  private account():AccountInfo|null{const a=this.msal.getActiveAccount();return a?.tenantId===this.settings.tenantId?a:null;}
  getAccount():BrowserAccount|null{const a=this.account();return a?{id:a.homeAccountId,tenantId:a.tenantId,username:a.username}:null;}
  private scopes(env:EnvironmentId){return [`${environments[env].url}/user_impersonation`];}
- async signIn(env:EnvironmentId='dev'){
-  try{const account=this.account();const options={scopes:this.scopes(env),redirectUri:this.redirectUri};const result=account?await this.msal.acquireTokenPopup({...options,account}):await this.msal.loginPopup({...options,prompt:'select_account'});if(result.account?.tenantId!==this.settings.tenantId)throw new AppError('AUTH_TENANT_MISMATCH','Chọn tài khoản trong đúng Microsoft tenant của ứng dụng.');this.msal.setActiveAccount(result.account);}catch(error){if(error instanceof AppError)throw error;throw new AppError('AUTH_FAILED',loginErrorMessage(error));}
+ async signIn(env:EnvironmentId='dev',retryPending=false){
+  try{const account=this.account();const options={scopes:this.scopes(env),redirectUri:this.redirectUri,overrideInteractionInProgress:retryPending};const result=account?await this.msal.acquireTokenPopup({...options,account}):await this.msal.loginPopup({...options,prompt:'select_account'});if(result.account?.tenantId!==this.settings.tenantId)throw new AppError('AUTH_TENANT_MISMATCH','Chọn tài khoản trong đúng Microsoft tenant của ứng dụng.');this.msal.setActiveAccount(result.account);}catch(error){if(error instanceof AppError)throw error;throw new AppError(error&&typeof error==='object'&&'errorCode' in error&&error.errorCode==='interaction_in_progress'?'AUTH_POPUP_PENDING':'AUTH_FAILED',loginErrorMessage(error));}
  }
  async getToken(env:EnvironmentId){
   const account=this.account();if(!account)throw new AppError('AUTH_INTERACTION_REQUIRED','Đăng nhập Microsoft để kết nối môi trường.');
@@ -32,6 +32,6 @@ function loginErrorMessage(error:unknown){
  else if(aad==='AADSTS65001'||code==='consent_required')hint='Tài khoản chưa được consent quyền Dataverse. Kiểm tra API permissions và chính sách admin consent.';
  else if(code==='popup_window_error'||code==='empty_window_error')hint='Trình duyệt không mở được popup. Cho phép popup cho trang này rồi bấm đăng nhập lại.';
  else if(code==='user_cancelled')hint='Cửa sổ đăng nhập đã đóng trước khi hoàn tất. Bấm đăng nhập để thử lại.';
- else if(code==='interaction_in_progress')hint='Một lượt đăng nhập vẫn đang chạy. Hoàn tất hoặc đóng cửa sổ đó, tải lại trang rồi thử lại.';
+ else if(code==='interaction_in_progress')hint='Một lượt đăng nhập vẫn đang chạy. Hoàn tất cửa sổ đó hoặc bấm Hủy lượt đăng nhập cũ và thử lại. Đóng popup cũ nếu còn mở.';
  return `Không đăng nhập/cấp quyền được${code||aad?' ['+[code,aad].filter(Boolean).join(' / ')+']':''}. ${hint}${correlation?' Mã đối chiếu: '+correlation:''}`;
 }
