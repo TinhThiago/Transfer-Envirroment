@@ -80,7 +80,7 @@ npm.cmd audit
 
 Xem [biên bản kiểm chứng](docs/live-verification.md) để phân biệt test giả lập, kiểm tra read-only thật và các phần chưa chạy ghi live. Không tự chọn bảng Production làm dữ liệu thử nghiệm.
 
-App không có đăng nhập nhiều người dùng và không được mở public/LAN. Muốn triển khai dùng chung cần bổ sung đăng nhập, phân quyền và vận hành worker/database trước khi thay đổi cách bind/hosting.
+App không có đăng nhập nhiều người dùng. Khi chạy remote, backend phải nằm sau cổng truy cập có xác thực và ổ đĩa SQLite bền vững; CORS không phải xác thực. Xem [hướng dẫn GitHub Pages + backend HTTPS](docs/github-pages.md) để cấu hình workflow deploy giao diện, VITE_API_BASE_URL và backend. Mặc định local vẫn giữ nguyên.
 
 ## Tham khảo kỹ thuật
 

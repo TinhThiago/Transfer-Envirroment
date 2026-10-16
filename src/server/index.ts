@@ -13,7 +13,7 @@ if(process.argv.includes('--secret-stdin')){
 if(process.argv.includes('--save-secret')&&process.env.MICROSOFT_CLIENT_SECRET)saveLocalSecret(process.env.MICROSOFT_CLIENT_SECRET);
 // Restore the current Windows user's encrypted credential on ordinary starts/reloads.
 if(!process.env.MICROSOFT_CLIENT_SECRET)process.env.MICROSOFT_CLIENT_SECRET=readLocalSecret();
-const config=loadConfig();const store=new JobStore();const app=buildApp({config,store});
-await app.listen({host:'127.0.0.1',port:config.port});console.log(`PH Environment Transfer: http://127.0.0.1:${config.port}`);
+const config=loadConfig();const store=new JobStore(config.databasePath);const app=buildApp({config,store});
+await app.listen({host:config.host,port:config.port});console.log(`PH Environment Transfer: http://${config.host}:${config.port}`);
 const worker=(app as unknown as {transferWorker:Worker}).transferWorker;const interval=setInterval(()=>{void worker.tick().catch(()=>console.error('Worker tick failed; inspect job state.'));},3000);
 const close=async()=>{clearInterval(interval);await app.close();store.close();process.exit(0);};process.on('SIGINT',()=>{void close()});process.on('SIGTERM',()=>{void close()});

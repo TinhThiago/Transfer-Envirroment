@@ -1,0 +1,58 @@
+name: Deploy frontend to GitHub Pages
+
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Configure Pages
+        id: pages
+        uses: actions/configure-pages@v6
+      - name: Validate backend URL
+        env:
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+        run: |
+          node --input-type=module <<'JS'
+          const value = process.env.VITE_API_BASE_URL;
+          if (!value) throw new Error('Set repository variable VITE_API_BASE_URL to your HTTPS backend origin.');
+          const url = new URL(value);
+          if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || url.pathname !== '/') {
+            throw new Error('VITE_API_BASE_URL must be an HTTPS origin, e.g. https://api.example.com');
+          }
+          JS
+      - run: npm ci
+      - run: npm test
+      - name: Build frontend
+        run: npm run build
+        env:
+          VITE_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+      - name: Upload frontend only
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
