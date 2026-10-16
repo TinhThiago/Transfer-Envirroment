@@ -2,7 +2,7 @@ import {environments,type EnvironmentId} from '../environments';
 import {AppError} from '../errors';
 import type {RequestOptions} from '../ports';
 export class DataverseClient{
-constructor(private token:(env:EnvironmentId)=>Promise<string>,private fetcher:typeof fetch=fetch,private sleep:(ms:number)=>Promise<void>=ms=>new Promise(r=>setTimeout(r,ms))){}
+constructor(private token:(env:EnvironmentId)=>Promise<string>,private fetcher:typeof fetch=(input,init)=>globalThis.fetch(input,init),private sleep:(ms:number)=>Promise<void>=ms=>new Promise(r=>setTimeout(r,ms))){}
   async request<T>(env:EnvironmentId,path:string,options:RequestOptions={}):Promise<T>{
     const origin=environments[env]?.url;if(!origin)throw new AppError('INVALID_ENVIRONMENT','Môi trường không hợp lệ.');
     const url=new URL(path,`${origin}/api/data/v9.2/`);
