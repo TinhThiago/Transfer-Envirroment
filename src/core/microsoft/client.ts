@@ -17,7 +17,7 @@ constructor(private token:(env:EnvironmentId)=>Promise<string>,private fetcher:t
       if(response.status===404)throw new AppError('NOT_FOUND','Không tìm thấy thành phần trong môi trường.',404);
       if(method==='GET'&&[429,502,503,504].includes(response.status)&&attempt<3){const retry=response.headers.get('Retry-After');const seconds=retry?Number(retry):NaN;const ms=Number.isFinite(seconds)?seconds*1000:retry?Math.max(0,Date.parse(retry)-Date.now()):1000*2**attempt;await this.sleep(Math.min(Math.max(ms||1000,0),60000));continue;}
       if(!response.ok){let vendorCode='';try{const data=await response.json() as {error?:{code?:string}};if(/^0x[0-9a-f]+$/i.test(data.error?.code||''))vendorCode=` (${data.error?.code})`;}catch{}
-        throw new AppError(response.status===429?'THROTTLED':'DATAVERSE_ERROR',`Dataverse trả lỗi HTTP ${response.status}${vendorCode}. Kiểm tra quyền, dependency và import job.`,response.status===429?429:502,response.status);}
+        throw new AppError(response.status===429?'THROTTLED':'DATAVERSE_ERROR',`Dataverse trả lỗi HTTP ${response.status}${vendorCode} tại ${method} ${url.pathname.slice(15).split(/[?(]/)[0]}. Kiểm tra quyền, dependency và import job.`,response.status===429?429:502,response.status);}
       if(response.status===204||response.headers.get('content-length')==='0')return undefined as T;
       return await response.json() as T;
     }

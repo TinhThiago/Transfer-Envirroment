@@ -13,3 +13,7 @@ it('calls native browser fetch without binding it to the Dataverse client',async
  globalThis.fetch=async function(this:unknown){if(this!==undefined&&this!==globalThis)throw new TypeError('Illegal invocation');requests++;return Response.json({UserId:'fixture-user'});};
  try{const client=new DataverseClient(async()=> 'fixture-token');await expect(client.request('dev','WhoAmI')).resolves.toEqual({UserId:'fixture-user'});expect(requests).toBe(1);}finally{globalThis.fetch=original;}
 });
+it('identifies the failing API without exposing response messages or request payloads',async()=>{
+ const client=new DataverseClient(async()=> 'token',async()=>Response.json({error:{code:'0x80041102',message:'private response'}},{status:400}));
+ await expect(client.request('production','PublishXml',{method:'POST',body:{private:'payload'}})).rejects.toMatchObject({message:expect.stringContaining('POST PublishXml')});
+});

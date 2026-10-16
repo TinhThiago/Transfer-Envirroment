@@ -53,3 +53,13 @@ it('does not poll a nonexistent import after Microsoft explicitly rejected the r
  await worker.tick();await worker.tick();expect(store.getJob(job.id)?.status).toBe('failed');expect(store.getJob(job.id)?.error?.code).toBe('DATAVERSE_ERROR');expect(polls).toBe(0);store.close();
 });
 
+it('waits for a metadata-cache response during read-only verification without repeating publish',async()=>{
+ const store=new JobStore(':memory:');store.savePlan(plan);const job=store.createJob(plan,'cache');store.update({...job,status:'importing',importId:'i'});let reads=0,publishes=0;
+ const worker=new Worker(store,{get:()=>plan,catalog:{tables:async()=>{reads++;if(reads===1)throw new AppError('DATAVERSE_ERROR','HTTP 400 (0x80041102)',502,400);return {items:[]}}}} as never,{importStatus:async()=>'succeeded',publish:async()=>{publishes++},cleanup:async()=>{}} as never,{} as never,{} as never,async()=>{});
+ await worker.tick();expect(store.getJob(job.id)?.status).toBe('succeeded');expect(reads).toBe(2);expect(publishes).toBe(1);store.close();
+});
+it('reports the failed phase and never automatically retries a failed publish',async()=>{
+ const store=new JobStore(':memory:');store.savePlan(plan);const job=store.createJob(plan,'publish-error');store.update({...job,status:'importing',importId:'i'});let publishes=0;
+ const worker=new Worker(store,{get:()=>plan} as never,{importStatus:async()=>'succeeded',publish:async()=>{publishes++;throw new AppError('DATAVERSE_ERROR','HTTP 400 (0x80041102)',502,400)}} as never,{} as never,{} as never);
+ await worker.tick();expect(store.getJob(job.id)?.step).toContain('Công bố cấu trúc đã nhập');expect(publishes).toBe(1);expect(store.getJob(job.id)?.status).toBe('partial');store.close();
+});

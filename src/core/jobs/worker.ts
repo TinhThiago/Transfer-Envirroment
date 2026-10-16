@@ -34,19 +34,19 @@ export class Worker{
    await checkCancel();
    // Unmanaged imports need publication before data APIs and published metadata are used.
    job.step='Công bố cấu trúc đã nhập';await save();await this.solutions.publish(plan);
-   await this.verifyWithPropagation(plan,checkCancel);
+   job.step='Kiểm tra metadata sau công bố';await save();await this.verifyWithPropagation(plan,checkCancel);
    if(plan.request.includeData){job.status='copying-data';job.step='Tạo bản ghi, gán lookup và liên kết N:N';await save();await this.data.copy(plan,job.id,this.store,checkCancel);job.counts=(await this.store.getJob(job.id))!.counts;}
    job.status='verifying';job.step='Kiểm tra thành phần tại môi trường đích';await save();if(plan.request.kind==='flow'){await this.flows.applyMappings(plan);await this.verify(plan);}
    try{await this.solutions.cleanup(plan,job);}catch{job.warnings.push('Chưa dọn được Solution tạm ở nguồn. Không ảnh hưởng thành phần đã nhập.');}
    if(plan.request.kind==='flow'&&plan.request.deferFlowConfiguration)job.warnings=[...new Set([...job.warnings,...this.flows.configurationWarnings(plan)])];
    job.status='succeeded';job.step=plan.request.kind==='flow'&&plan.request.deferFlowConfiguration?'Đã chuyển flow Off — chờ cấu hình connection tại đích':'Chuyển đổi hoàn tất';await save();
-  }catch(error){const info=safeError(error);job.error=info;if(info.code==='AUTH_INTERACTION_REQUIRED'){job.status='awaiting-input';}else if(info.code==='CANCELLED'){job.status=job.schemaImported?'partial':'cancelled';}else if((job.importId&&!job.importRejected&&!job.schemaImported&&info.code!=='IMPORT_FAILED')||(job.schemaImported&&info.code==='WRITE_OUTCOME_UNKNOWN')){job.status='awaiting-input';}else{job.status=job.schemaImported?'partial':'failed';}job.step=info.message;await save();}
+  }catch(error){const info=safeError(error);info.message=`${job.step}: ${info.message}`;job.error=info;if(info.code==='AUTH_INTERACTION_REQUIRED'){job.status='awaiting-input';}else if(info.code==='CANCELLED'){job.status=job.schemaImported?'partial':'cancelled';}else if((job.importId&&!job.importRejected&&!job.schemaImported&&info.code!=='IMPORT_FAILED')||(job.schemaImported&&info.code==='WRITE_OUTCOME_UNKNOWN')){job.status='awaiting-input';}else{job.status=job.schemaImported?'partial':'failed';}job.step=info.message;await save();}
  }
  private async verifyWithPropagation(plan:TransferPlan,checkCancel:()=>void|Promise<void>){
   if(plan.request.kind==='flow')return;
   for(let attempt=0;;attempt++){
    await checkCancel();try{await this.verify(plan);return;}catch(error){
-    if(!(error instanceof AppError)||error.code!=='VERIFY_FAILED'||attempt>=4)throw error;
+    if(!(error instanceof AppError)||!(error.code==='VERIFY_FAILED'||error.code==='DATAVERSE_ERROR'&&error.upstreamStatus===400&&/0x80041102/i.test(error.message))||attempt>=4)throw error;
     // Only retry read-only checks. Never resubmit an import or repeat a data write.
     await this.sleep(2000*2**attempt);
    }
