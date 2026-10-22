@@ -63,3 +63,11 @@ it('reports the failed phase and never automatically retries a failed publish',a
  const worker=new Worker(store,{get:()=>plan} as never,{importStatus:async()=>'succeeded',publish:async()=>{publishes++;throw new AppError('DATAVERSE_ERROR','HTTP 400 (0x80041102)',502,400)}} as never,{} as never,{} as never);
  await worker.tick();expect(store.getJob(job.id)?.step).toContain('Công bố cấu trúc đã nhập');expect(publishes).toBe(1);expect(store.getJob(job.id)?.status).toBe('partial');store.close();
 });
+it('pauses on concurrency failure and never automatically polls or resubmits while waiting',async()=>{
+ const store=new JobStore(':memory:');store.savePlan(plan);const job=store.createJob(plan,'busy');store.update({...job,status:'importing',importId:'i',asyncId:'a'});let polls=0;
+ const worker=new Worker(store,{get:()=>plan} as never,{importStatus:async()=>{polls++;throw new AppError('ENVIRONMENT_BUSY','Đang có tiến trình khác')}} as never,{} as never,{} as never);await worker.tick();expect(store.getJob(job.id)?.status).toBe('awaiting-input');await worker.tick();expect(polls).toBe(1);expect(store.getJob(job.id)?.importId).toBe('i');store.close();
+});
+it.each([true,false])('verifies bundled global choices at the destination before cleanup (exists=%s)',async exists=>{
+ const store=new JobStore(':memory:');const p={...plan,components:[{id:'choice',kind:'dependency',componentType:9,logicalName:'ph_group',displayName:'Group',selectable:true}]} as TransferPlan;store.savePlan(p);const job=store.createJob(p,'choice-verify');store.update({...job,status:'importing',importId:'i'});let cleanups=0;
+ const worker=new Worker(store,{get:()=>p,catalog:{tables:async()=>({items:[]}),client:{all:async()=>exists?[{Name:'ph_group',IsGlobal:true}]:[]}}} as never,{importStatus:async()=>'succeeded',publish:async()=>{},cleanup:async()=>{cleanups++}} as never,{} as never,{} as never,async()=>{});await worker.tick();expect(store.getJob(job.id)?.status).toBe(exists?'succeeded':'partial');expect(cleanups).toBe(exists?1:0);store.close();
+});

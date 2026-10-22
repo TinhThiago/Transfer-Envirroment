@@ -1,5 +1,7 @@
 import type {ComponentRef,Dependency,TableMetadata,TransferRequest} from '../../shared/contracts';
-import type {CatalogService,RawTable} from '../catalog/catalog';
+import {label,type CatalogService,type RawTable} from '../catalog/catalog';
+interface GlobalChoice{MetadataId:string;Name:string;IsGlobal:boolean;IsCustomOptionSet:boolean;IsManaged:boolean;DisplayName?:Parameters<typeof label>[0]}
+
 import {AppError} from '../errors';
 export async function walkDependencies(roots:ComponentRef[],read:(item:ComponentRef)=>Promise<ComponentRef[]>):Promise<Dependency[]>{
  const selected=new Set(roots.map(r=>r.id));const result=new Map<string,Dependency>();const cache=new Map<string,ComponentRef[]>();
@@ -18,7 +20,10 @@ interface DependencyRow{requiredcomponentobjectid:string;requiredcomponentparent
 export class DependencyReader{
  private snapshots=new WeakMap<TransferRequest,Promise<{tables:TableMetadata[];targetTables:RawTable[]}>>();
  constructor(private catalog:CatalogService){}
+ private async globalChoices(request:TransferRequest){return Promise.all([request.source,request.target].map(env=>this.catalog.client.all<GlobalChoice>(env,'GlobalOptionSetDefinitions?$select=MetadataId,Name,IsGlobal,IsManaged,IsCustomOptionSet,DisplayName')));}
  async required(request:TransferRequest,item:ComponentRef):Promise<ComponentRef[]>{
+  if(item.componentType===9){const [src,dst]=await this.globalChoices(request);const choice=src.find(c=>c.MetadataId===item.id);if(!choice||choice.Name!==item.logicalName||!choice.IsGlobal||!choice.IsCustomOptionSet||choice.IsManaged||dst.some(c=>c.Name===choice.Name))throw new AppError('STALE_PLAN','Global Choice đã thay đổi hoặc đã có ở đích. Kiểm tra lại kế hoạch.');return [];}
+
   const {source,target}=request;let snapshot=this.snapshots.get(request);if(!snapshot){snapshot=Promise.all([this.catalog.tables(source),this.catalog.rawTables(target)]).then(([catalog,targetTables])=>({tables:catalog.items,targetTables}));this.snapshots.set(request,snapshot);}const {tables,targetTables}=await snapshot;const ownTable=item.kind==='table'?item.id:request.tableId;
   const rows=await this.catalog.client.all<DependencyRow>(source,`dependencies?$select=dependencytype,requiredcomponentobjectid,requiredcomponentparentid,requiredcomponenttype&$filter=${item.kind==='table'?`(dependentcomponentobjectid eq ${item.id} or dependentcomponentparentid eq ${item.id})`:`dependentcomponentobjectid eq ${item.id}`}`);
   const resolved=new Map<string,ComponentRef>();
@@ -46,6 +51,7 @@ export class DependencyReader{
    // Do not turn them into missing external assets; published dependencies remain checked.
    if(row.dependencytype===1&&!sourceComponents.length)continue;
    if(sourceComponents[0]?.componenttype)type=sourceComponents[0].componenttype;
+   if(type===9){const [src,dst]=await this.globalChoices(request);const choice=src.find(c=>c.MetadataId===id);if(choice?.IsGlobal){if(dst.some(c=>c.Name===choice.Name))continue;const selectable=choice.IsCustomOptionSet===true&&choice.IsManaged===false;resolved.set(id,{id,kind:'dependency',componentType:9,logicalName:choice.Name,displayName:'Global Choice · '+label(choice.DisplayName,choice.Name),managed:choice.IsManaged,selectable,...!selectable?{reason:'Global Choice system/managed chưa có ở đích; cần cài Solution cung cấp thành phần này trước.'}:{}});continue;}}
    if(request.kind==='flow'){
     if(type===29){const flow=(await this.catalog.flows(source,target)).items.find(f=>f.id===id);if(flow?.selectable){resolved.set(id,flow);continue;}}
     if(type===380){const variable=await this.catalog.client.request<{schemaname:string;displayname:string}>(source,`environmentvariabledefinitions(${id})?$select=schemaname,displayname`);resolved.set(id,{id,kind:'dependency',componentType:type,logicalName:variable.schemaname,displayName:variable.displayname||variable.schemaname,selectable:true});continue;}

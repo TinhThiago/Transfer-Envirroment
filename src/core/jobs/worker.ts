@@ -12,7 +12,7 @@ export class Worker{
  async tick(target?:Job['target']){
   if(this.running)return;this.running=true;
   try{const blocked=new Set<string>();for(const job of await this.store.unfinished()){
-   if(target&&job.target!==target)continue;if(terminalStatuses.includes(job.status))continue;if(blocked.has(job.target))continue;blocked.add(job.target);if(job.status==='awaiting-input'&&(!job.importId||job.schemaImported))continue;await this.run(job);
+   if(target&&job.target!==target)continue;if(terminalStatuses.includes(job.status))continue;if(blocked.has(job.target))continue;blocked.add(job.target);if(job.status==='awaiting-input'&&(!job.importId||job.schemaImported||job.error?.code==='ENVIRONMENT_BUSY'))continue;await this.run(job);
   }}finally{this.running=false;}
  }
  private async run(job:Job){
@@ -40,7 +40,7 @@ export class Worker{
    job.step='Dọn container Solution tạm ở nguồn và đích';await save();try{await this.solutions.cleanup(plan,job);}catch(error){const info=safeError(error);if(info.code==='WRITE_OUTCOME_UNKNOWN'||info.code==='AUTH_INTERACTION_REQUIRED')throw error;throw new AppError('CLEANUP_FAILED','Đã chuyển thành phần, nhưng chưa dọn hết container Solution tạm ở nguồn/đích: '+info.message);}
    if(plan.request.kind==='flow'&&plan.request.deferFlowConfiguration)job.warnings=[...new Set([...job.warnings,...this.flows.configurationWarnings(plan)])];
    job.status='succeeded';job.step=plan.request.kind==='flow'&&plan.request.deferFlowConfiguration?'Đã chuyển flow Off — chờ cấu hình connection tại đích':'Chuyển đổi hoàn tất';await save();
-  }catch(error){const info=safeError(error);info.message=`${job.step}: ${info.message}`;job.error=info;if(info.code==='AUTH_INTERACTION_REQUIRED'){job.status='awaiting-input';}else if(info.code==='CANCELLED'){job.status=job.schemaImported?'partial':'cancelled';}else if((job.importId&&!job.importRejected&&!job.schemaImported&&info.code!=='IMPORT_FAILED')||(job.schemaImported&&info.code==='WRITE_OUTCOME_UNKNOWN')){job.status='awaiting-input';}else{job.status=job.schemaImported?'partial':'failed';}job.step=info.message;await save();}
+  }catch(error){const info=safeError(error);info.message=`${job.step}: ${info.message}`;job.error=info;if(info.code==='AUTH_INTERACTION_REQUIRED'||info.code==='ENVIRONMENT_BUSY'){job.status='awaiting-input';}else if(info.code==='CANCELLED'){job.status=job.schemaImported?'partial':'cancelled';}else if((job.importId&&!job.importRejected&&!job.schemaImported&&info.code!=='IMPORT_FAILED')||(job.schemaImported&&info.code==='WRITE_OUTCOME_UNKNOWN')){job.status='awaiting-input';}else{job.status=job.schemaImported?'partial':'failed';}job.step=info.message;await save();}
  }
  private async verifyWithPropagation(plan:TransferPlan,checkCancel:()=>void|Promise<void>){
   if(plan.request.kind==='flow')return;
@@ -55,6 +55,7 @@ export class Worker{
  private async verify(plan:TransferPlan){
   const {source,target}=plan.request;
   if(plan.request.kind==='flow'){await this.flows.verify(plan);return;}
+  const choices=plan.components.filter(c=>c.componentType===9);if(choices.length){const existing=await this.planner.catalog.client.all<{Name:string;IsGlobal:boolean}>(target,'GlobalOptionSetDefinitions?$select=Name,IsGlobal');for(const choice of choices)if(!existing.some(c=>c.IsGlobal&&c.Name===choice.logicalName))throw new AppError('VERIFY_FAILED',`Chưa tìm thấy Global Choice ${choice.logicalName} ở đích.`);}
   if(plan.request.kind==='table'){
    const tables=(await this.planner.catalog.tables(target)).items;
    for(const component of plan.components.filter(c=>c.kind==='table')){

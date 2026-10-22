@@ -1,3 +1,4 @@
+import {resumeBusyImport} from '../core/jobs/resume-busy';
 import Fastify from 'fastify';
 import staticPlugin from '@fastify/static';
 import {existsSync} from 'node:fs';
@@ -71,6 +72,8 @@ export function buildApp({config,store=new JobStore(),client=new MicrosoftClient
  });
  app.get('/api/jobs/:id',async req=>{const {id}=z.object({id:guidSchema}).parse(req.params);const job=store.getJob(id);if(!job)throw new AppError('JOB_NOT_FOUND','Không tìm thấy job.',404);return job;});
  app.post('/api/jobs/:id/cancel',async req=>{const {id}=z.object({id:guidSchema}).parse(req.params);const job=store.getJob(id);if(!job)throw new AppError('JOB_NOT_FOUND','Không tìm thấy job.',404);if(job.importId&&!job.schemaImported)throw new AppError('IMPORT_IN_PROGRESS','Import đã gửi cho Microsoft. App tiếp tục theo dõi, không thể hủy transaction từ xa.');job.cancelRequested=true;return store.update(job);});
+ const resumingImports=new Set<string>();
+ app.post('/api/jobs/:id/resume-import',async req=>{const {id}=z.object({id:guidSchema}).parse(req.params);if(resumingImports.has(id))throw new AppError('JOB_BUSY','Yêu cầu tiếp tục đang được xử lý.',409);resumingImports.add(id);try{const job=store.getJob(id);if(!job)throw new AppError('JOB_NOT_FOUND','Không tìm thấy job.',404);const resumed=await resumeBusyImport(job,planner,new SolutionService(client));const approved=await planner.get(job.planId);if(approved.request.kind==='flow')flows.parameters(approved);return store.update(resumed);}finally{resumingImports.delete(id);}});
  app.post('/api/jobs/:id/retry',async req=>{const {id}=z.object({id:guidSchema}).parse(req.params);const job=store.getJob(id);if(!job)throw new AppError('JOB_NOT_FOUND','Không tìm thấy job.',404);if(job.status!=='partial'||!job.schemaImported)throw new AppError('UNSAFE_RETRY','Chỉ tiếp tục các bước còn lại của job partial đã xác nhận import cấu hình thành công.');const plan=await planner.get(job.planId);if(plan.hash!==job.planHash)throw new AppError('PLAN_MANIFEST_CHANGED','Kế hoạch không khớp job đã duyệt.');if(plan.request.kind==='flow')flows.parameters(plan);job.status='queued';job.step='Tiếp tục sau import đã hoàn tất';job.error=undefined;job.cancelRequested=false;return store.update(job);});
  const dist=resolve('dist');if(existsSync(resolve(dist,'index.html'))){app.register(staticPlugin,{root:dist,index:'index.html'});app.setNotFoundHandler((req,reply)=>req.url.startsWith('/api/')?reply.status(404).send({error:{code:'NOT_FOUND',message:'Không có API này.'}}):reply.sendFile('index.html'));}
  return app;

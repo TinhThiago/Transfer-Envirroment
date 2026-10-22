@@ -32,6 +32,7 @@ export class BrowserJobStore implements JobStorePort{
  recover(target?:EnvironmentId){return this.transaction(true,s=>{for(const job of Object.values(s.jobs)){
   if(target&&job.target!==target)continue;
   if(terminalStatuses.includes(job.status))continue;
+  if(job.error?.code==='ENVIRONMENT_BUSY'&&!(s.journal[job.id]||[]).length){job.resumeRequired=true;job.status='awaiting-input';continue;}
   job.resumeRequired=true;job.status=job.schemaImported&&!(s.journal[job.id]||[]).length?'partial':'awaiting-input';job.step=job.importId&&!job.schemaImported?'Đối chiếu import cũ bằng ImportJobId; không gửi lại.':'Phiên trước đã dừng. Cần đối chiếu trước khi thực hiện thêm thao tác ghi.';
   job.error={code:(s.journal[job.id]||[]).length?'WRITE_OUTCOME_UNKNOWN':'SESSION_INTERRUPTED',message:job.step};job.updatedAt=new Date().toISOString();
  }});}

@@ -63,3 +63,15 @@ Tài liệu Microsoft: https://learn.microsoft.com/en-us/power-apps/developer/da
 Client ID SPA mặc định: `7c279345-da37-45cc-ab63-70dba694349e`. Nếu GitHub Settings → Secrets and variables → Actions → Variables đang có `VITE_MICROSOFT_CLIENT_ID`, hãy đổi sang ID này hoặc xóa biến để dùng mặc định. Không thay Client ID backend cũ vì đó có thể là application user riêng.
 
 Nếu báo `interaction_in_progress`, bấm **Hủy lượt đăng nhập cũ và thử lại**. Đây là thao tác chủ động hủy yêu cầu popup cũ và mở yêu cầu mới; popup cũ còn mở cần tự đóng. App không tự override khi bắt lỗi và không xóa IndexedDB/lịch sử.
+## Chờ tiến trình khác và tiếp tục
+
+Khi async import kết thúc thất bại với `SolutionConcurrencyFailure` (`-2147020463` / `0x80071151`), job chuyển sang **Đang chờ tiến trình khác** và hiển thị nút **Tiếp tục chuyển đổi**. App không tự gửi lại import. Người dùng kiểm tra Solution history tại môi trường đích rồi bấm nút khi sẵn sàng.
+
+Khi bấm, app đọc lại async operation cũ để xác nhận đúng lỗi concurrency đã kết thúc, kiểm tra lại kế hoạch và lưu các Import/Async ID cũ vào lịch sử lượt thử. Chỉ sau đó job mới được đưa về hàng đợi. Bấm lặp hoặc kết quả cũ chưa rõ ràng không tạo thêm lượt import. Nếu môi trường vẫn bận ở lượt mới, job lại dừng chờ. Reload vẫn giữ trạng thái chờ.
+
+Job cũ `IMPORT_FAILED` có Async ID cũng có thể bấm nút để kiểm tra; lỗi khác concurrency sẽ bị từ chối gửi lại. Kế hoạch hết hạn/thay đổi phải kiểm tra và tạo kế hoạch mới. Bản sửa đã xác minh bằng 130 kiểm thử, TypeScript và build Pages; không thực hiện import trực tiếp trong bước triển khai này.
+## Global Choice đi kèm bảng/column
+
+Global Choice custom unmanaged còn thiếu được tự thêm vào cùng kế hoạch và gói Solution (component type 9). Choice đã có ở đích được nhận diện theo Name, không dựa riêng GUID. Choice system/managed chưa có vẫn yêu cầu cài Solution cung cấp trước. Danh sách thành phần hiển thị tên Choice đi kèm để người dùng xem trước khi chuyển.
+
+App publish Choice bằng optionset, xác minh Choice tồn tại ở đích rồi mới dọn container Solution tạm. Nếu Choice xuất hiện/thay đổi sau khi lập kế hoạch, phải kiểm tra lại để tránh ghi đè ngoài kế hoạch. Kiểm thử: 139 tests, TypeScript, build Pages; đã kiểm tra read-only kế hoạch ph_equipment_category, chưa thực hiện import thật.

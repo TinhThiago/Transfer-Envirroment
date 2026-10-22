@@ -47,14 +47,15 @@ export class SolutionService{
   job.asyncId=result.AsyncOperationId;await save(job);
  }
  async importStatus(env:EnvironmentId,job:Job):Promise<'pending'|'succeeded'|'failed'>{
-  if(job.asyncId){const op=await this.client.request<{statecode:number;statuscode:number;errorcode?:number}>(env,`asyncoperations(${job.asyncId})?$select=statecode,statuscode,errorcode`);if(op.statecode!==3)return 'pending';return op.statuscode===30?'succeeded':'failed';}
+  if(job.asyncId){const op=await this.client.request<{statecode:number;statuscode:number;errorcode?:number}>(env,`asyncoperations(${job.asyncId})?$select=statecode,statuscode,errorcode`);if(op.statecode!==3)return 'pending';if(op.statuscode===31&&op.errorcode===-2147020463)throw new AppError('ENVIRONMENT_BUSY','Môi trường đích đang có tiến trình chỉnh sửa bảng/import/publish khác. Kiểm tra Solution history, chờ hoàn tất rồi bấm Tiếp tục chuyển đổi.');return op.statuscode===30?'succeeded':'failed';}
   if(job.importId){try{const status=await this.client.request<{progress:number;completedon?:string;data?:string}>(env,`importjobs(${job.importId})?$select=progress,completedon,data`);if(status.completedon||status.progress>=100){if(status.data&&/result="failure"|success="false"|errorcode="(?!0")/i.test(status.data))return 'failed';if(status.data&&/result="success"|success="true"/i.test(status.data))return 'succeeded';throw new AppError('IMPORT_OUTCOME_UNKNOWN','Import đã kết thúc nhưng chưa có kết quả rõ ràng. Đối chiếu ImportJobId, không tự nhập lại.');}return 'pending';}catch(e){if(e instanceof AppError&&e.code==='NOT_FOUND')throw new AppError('IMPORT_OUTCOME_UNKNOWN','Chưa xác định được import đã được chấp nhận. Tra cứu ImportJobId trước khi chạy lại.');throw e;}}
   throw new AppError('IMPORT_OUTCOME_UNKNOWN','Thiếu thông tin theo dõi import.');
  }
- async publish(plan:TransferPlan){if(plan.request.kind==='flow')return;const tableNames=plan.request.kind==='table'?plan.components.map(c=>c.logicalName):[(await this.client.request<{LogicalName:string}>(plan.request.target,`EntityDefinitions(LogicalName='${(await this.client.request<{LogicalName:string}>(plan.request.source,`EntityDefinitions(${plan.request.tableId})?$select=LogicalName`)).LogicalName}')?$select=LogicalName`)).LogicalName];
+ async publish(plan:TransferPlan){if(plan.request.kind==='flow')return;const tableNames=plan.request.kind==='table'?plan.components.filter(c=>c.kind==='table').map(c=>c.logicalName):[(await this.client.request<{LogicalName:string}>(plan.request.target,`EntityDefinitions(LogicalName='${(await this.client.request<{LogicalName:string}>(plan.request.source,`EntityDefinitions(${plan.request.tableId})?$select=LogicalName`)).LogicalName}')?$select=LogicalName`)).LogicalName];
+  const choiceNames=plan.components.filter(c=>c.componentType===9).map(c=>c.logicalName);
   // Logical names come from server metadata, never client XML.
-  if(tableNames.some(n=>!/^[a-zA-Z0-9_]+$/.test(n)))throw new AppError('INVALID_SCHEMA','Logical name không hợp lệ.');
-  await this.client.request(plan.request.target,'PublishXml',{method:'POST',body:{ParameterXml:`<importexportxml><entities>${tableNames.map(n=>`<entity>${n}</entity>`).join('')}</entities></importexportxml>`}});
+  if([...tableNames,...choiceNames].some(n=>!/^[a-zA-Z0-9_]+$/.test(n)))throw new AppError('INVALID_SCHEMA','Logical name không hợp lệ.');
+  await this.client.request(plan.request.target,'PublishXml',{method:'POST',body:{ParameterXml:`<importexportxml><entities>${tableNames.map(n=>`<entity>${n}</entity>`).join('')}</entities>${choiceNames.length?`<optionsets>${choiceNames.map(n=>`<optionset>${n}</optionset>`).join('')}</optionsets>`:''}</importexportxml>`}});
  }
  async cleanup(plan:TransferPlan,job:Job){
   if(!job.sourceSolutionId&&!job.solutionName)return;
