@@ -1,5 +1,5 @@
 import type {ComponentRef,Dependency,TableMetadata,TransferRequest} from '../../shared/contracts';
-import {label,type CatalogService,type RawTable} from '../catalog/catalog';
+import {label,type CatalogService,type RawTable,type RawColumn} from '../catalog/catalog';
 interface GlobalChoice{MetadataId:string;Name:string;IsGlobal:boolean;IsCustomOptionSet:boolean;IsManaged:boolean;DisplayName?:Parameters<typeof label>[0]}
 
 import {AppError} from '../errors';
@@ -58,17 +58,24 @@ export class DependencyReader{
     const refs=await this.catalog.client.all<{connectionreferenceid:string;connectionreferencelogicalname:string;connectionreferencedisplayname:string}>(source,`connectionreferences?$select=connectionreferenceid,connectionreferencelogicalname,connectionreferencedisplayname&$filter=connectionreferenceid eq ${id}`);
     if(refs[0]){resolved.set(id,{id,kind:'dependency',componentType:type,logicalName:refs[0].connectionreferencelogicalname,displayName:refs[0].connectionreferencedisplayname,selectable:true});continue;}
    }
-   const table=tables.find(t=>t.id===(type===1?id:row.requiredcomponentparentid));
+   let table=tables.find(t=>t.id===(type===1?id:row.requiredcomponentparentid));let requiredColumn:RawColumn|undefined;
+   if(type===2&&!table){
+    if(!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(id))throw new AppError('INVALID_METADATA','Dependency column không có MetadataId hợp lệ.');
+    const owners=await this.catalog.client.all<{MetadataId:string;LogicalName:string;Attributes:RawColumn[]}>(source,`EntityDefinitions?$select=MetadataId,LogicalName&$expand=Attributes($select=MetadataId,LogicalName,DisplayName;$filter=MetadataId eq ${id})`);
+    const matches=owners.filter(owner=>owner.Attributes?.some(column=>column.MetadataId.toLowerCase()===id.toLowerCase()));
+    if(matches.length>1)throw new AppError('AMBIGUOUS_DEPENDENCY','Không xác định duy nhất bảng chứa column phụ thuộc.');
+    if(matches[0]){table=tables.find(t=>t.id===matches[0].MetadataId&&t.logicalName===matches[0].LogicalName);requiredColumn=matches[0].Attributes.find(column=>column.MetadataId.toLowerCase()===id.toLowerCase());}
+   }
    if(table){
     const dst=targetTables.find(t=>t.LogicalName===table.logicalName);
     if(!dst){resolved.set(table.id,table.custom&&!table.managed?table:{...table,selectable:false,reason:'Bảng system/managed bắt buộc chưa có ở đích.'});continue;}
     if(type===1)continue;
-    if(type===2){const cols=await this.catalog.attributes(source,table.id);const col=cols.find(c=>c.MetadataId===id);if(col&&(await this.catalog.attributes(target,dst.MetadataId)).some(c=>c.LogicalName===col.LogicalName))continue;if(request.kind==='column'&&table.id===request.tableId){const sibling=(await this.catalog.columns(source,target,table.id)).items.find(c=>c.id===id);if(sibling?.selectable){resolved.set(id,sibling);continue;}}}
+    if(type===2){const cols=requiredColumn?[requiredColumn]:await this.catalog.attributes(source,table.id);const col=cols.find(c=>c.MetadataId===id);requiredColumn=col;if(col&&(await this.catalog.attributes(target,dst.MetadataId)).some(c=>c.LogicalName===col.LogicalName))continue;if(request.kind==='column'&&table.id===request.tableId){const sibling=(await this.catalog.columns(source,target,table.id)).items.find(c=>c.id===id);if(sibling?.selectable){resolved.set(id,sibling);continue;}}}
    }
    // Non-table assets must already exist at the destination; never silently pull an app/plugin.
    const existing=await this.catalog.client.all<{objectid:string}>(target,`solutioncomponents?$select=objectid&$filter=objectid eq ${id} and componenttype eq ${type}&$top=1`);
    if(existing.length)continue;
-   resolved.set(id,{id,kind:'dependency',componentType:type,logicalName:id,displayName:table?`${table.displayName} · thành phần ${type}`:`Dependency loại ${type}`,selectable:false,reason:'Thành phần bắt buộc chưa có ở đích; chuyển qua Solution riêng trước.'});
+   resolved.set(id,{id,kind:'dependency',componentType:type,logicalName:requiredColumn?.LogicalName||id,displayName:requiredColumn&&table?`${table.displayName} · ${label(requiredColumn.DisplayName,requiredColumn.LogicalName)}`:table?`${table.displayName} · thành phần ${type}`:`Dependency loại ${type}`,selectable:false,reason:'Thành phần bắt buộc chưa có ở đích; chuyển qua Solution riêng trước.'});
   }
   return [...resolved.values()];
  }
