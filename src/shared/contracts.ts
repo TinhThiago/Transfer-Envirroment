@@ -4,7 +4,7 @@ export const guidSchema=z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[
 export type EnvironmentId=z.infer<typeof environmentSchema>;
 export const requestSchema=z.object({source:environmentSchema,target:environmentSchema,kind:z.enum(['table','column','flow']),ids:z.array(guidSchema).min(1).max(100),tableId:guidSchema.optional(),includeData:z.boolean().default(false),deferFlowConfiguration:z.boolean().optional()}).refine(v=>v.source!==v.target,'Nguồn và đích phải khác nhau.').refine(v=>v.kind==='table'||!v.includeData,'Chỉ Table hỗ trợ chuyển data.').refine(v=>v.kind!=='column'||!!v.tableId,'Phải chọn một bảng.');
 export type TransferRequest=z.infer<typeof requestSchema>;
-export interface ComponentRef{id:string;kind:'table'|'column'|'flow'|'dependency';logicalName:string;displayName:string;componentType:number;selectable:boolean;reason?:string;managed?:boolean}
+export interface ComponentRef{id:string;kind:'table'|'column'|'flow'|'dependency';logicalName:string;displayName:string;componentType:number;selectable:boolean;reason?:string;managed?:boolean;bundled?:boolean}
 export interface TableMetadata extends ComponentRef{kind:'table';custom:boolean;entitySetName:string;primaryId:string;primaryName:string;objectTypeCode:number;tableType:string;ownershipType:string;activity:boolean;virtual:boolean}
 export interface ColumnMetadata extends ComponentRef{kind:'column';attributeType:string;create:boolean;update:boolean;primary:boolean;required:boolean;sourceType:number;targets:string[]}
 export interface FlowMetadata extends ComponentRef{kind:'flow';state:number;solutionAware:boolean}

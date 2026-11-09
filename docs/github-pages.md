@@ -75,3 +75,8 @@ Job cũ `IMPORT_FAILED` có Async ID cũng có thể bấm nút để kiểm tra
 Global Choice custom unmanaged còn thiếu được tự thêm vào cùng kế hoạch và gói Solution (component type 9). Choice đã có ở đích được nhận diện theo Name, không dựa riêng GUID. Choice system/managed chưa có vẫn yêu cầu cài Solution cung cấp trước. Danh sách thành phần hiển thị tên Choice đi kèm để người dùng xem trước khi chuyển.
 
 App publish Choice bằng optionset, xác minh Choice tồn tại ở đích rồi mới dọn container Solution tạm. Nếu Choice xuất hiện/thay đổi sau khi lập kế hoạch, phải kiểm tra lại để tránh ghi đè ngoài kế hoạch. Kiểm thử: 139 tests, TypeScript, build Pages; đã kiểm tra read-only kế hoạch ph_equipment_category, chưa thực hiện import thật.
+## Relationship đi kèm lookup được chọn
+
+Dependency Relationship nội bộ loại 3 được tra qua tên relationship, đối chiếu cấu trúc tham chiếu với Entity Relationship metadata. Với chuyển Column, lookup custom unmanaged được chọn cùng gói và cả hai bảng đã có ở đích, app tự thêm relationship exportable loại 10 vào manifest. Không gửi loại 3 cho AddSolutionComponent. Relationship đã có được đối chiếu schema name và hai đầu quan hệ; xung đột vẫn chặn. Relationship managed hoặc thiếu lookup được chọn không tự sao chép.
+
+App kiểm tra lại trước import và xác minh relationship ở đích trước khi dọn Solution tạm. Bản sửa: 150 kiểm thử, typecheck và build local/Pages; kế hoạch Production → Dev của ph_production_order_work_center_tracking đã qua read-only validation với 5 cột + 2 relationship, chưa chạy import thật.

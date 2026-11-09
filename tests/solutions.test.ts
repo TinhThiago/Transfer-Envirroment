@@ -49,3 +49,7 @@ it('refuses to delete managed or mismatched solutions and never deletes componen
 it('treats absent containers as already cleaned',async()=>{
  const job={id:'11111111-1111-4111-8111-111111111111',sourceSolutionId:'source',solutionName:'phtransfer_11111111111141118111111111111111',schemaImported:true} as Job;const service=new SolutionService({all:async()=>[],request:async()=>{throw Error('must not delete')}} as never);await expect(service.cleanup({request:{source:'dev',target:'production'}} as never,job)).resolves.toBeUndefined();
 });
+it.each([false,true])('packages only the exportable relationship and avoids duplicate inclusion (already included=%s)',async included=>{
+ const added:any[]=[];const service=new SolutionService({all:async(_:string,path:string)=>path.startsWith('solutions')?[{solutionid:'container'}]:path.startsWith('solutioncomponents')&&included?[{objectid:'exportable-rel'}]:[],request:async(_:string,path:string,options?:any)=>{if(path==='AddSolutionComponent')added.push(options.body);if(path==='ExportSolution')return {ExportSolutionFile:'zip'}}} as never);
+ await service.build({request:{source:'production',target:'dev',kind:'column'},components:[{id:'lookup',kind:'column',componentType:2},{id:'exportable-rel',kind:'dependency',componentType:10,bundled:true}]} as never,{id:'job',solutionName:'ph_job',sourceSolutionId:'container'} as never,()=>{});expect(added.filter(c=>c.ComponentType===10)).toHaveLength(included?0:1);expect(added.some(c=>c.ComponentType===3)).toBe(false);
+});

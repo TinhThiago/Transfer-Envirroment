@@ -55,6 +55,7 @@ export class Worker{
  private async verify(plan:TransferPlan){
   const {source,target}=plan.request;
   if(plan.request.kind==='flow'){await this.flows.verify(plan);return;}
+  const relationships=plan.components.filter(c=>c.componentType===10&&c.bundled);if(relationships.length){const actual=await this.planner.catalog.client.all<{SchemaName:string}>(target,'RelationshipDefinitions/Microsoft.Dynamics.CRM.OneToManyRelationshipMetadata?$select=SchemaName');for(const rel of relationships)if(!actual.some(r=>r.SchemaName===rel.logicalName))throw new AppError('VERIFY_FAILED',`Chưa tìm thấy relationship ${rel.logicalName} ở đích.`);}
   const choices=plan.components.filter(c=>c.componentType===9);if(choices.length){const existing=await this.planner.catalog.client.all<{Name:string;IsGlobal:boolean}>(target,'GlobalOptionSetDefinitions?$select=Name,IsGlobal');for(const choice of choices)if(!existing.some(c=>c.IsGlobal&&c.Name===choice.logicalName))throw new AppError('VERIFY_FAILED',`Chưa tìm thấy Global Choice ${choice.logicalName} ở đích.`);}
   if(plan.request.kind==='table'){
    const tables=(await this.planner.catalog.tables(target)).items;

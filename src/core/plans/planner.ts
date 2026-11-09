@@ -16,7 +16,7 @@ export class Planner{
   const available=await this.available(request);const roots=request.ids.map(id=>available.find(c=>c.id===id));
   if(roots.some(c=>!c?.selectable))throw new AppError('INVALID_SELECTION','Có thành phần không hợp lệ hoặc đã có ở đích. Tải lại danh sách.');
   let components=roots as ComponentRef[];const dependencies=await walkDependencies(components,item=>this.reader.required(request,item));
-  const automatic=dependencies.filter(d=>d.componentType===9&&d.selectable&&d.managed===false);components=[...components,...automatic];
+  const automatic=dependencies.filter(d=>d.selectable&&(d.componentType===9&&d.managed===false||d.componentType===10&&d.bundled===true));components=[...components,...automatic];
   const plan:TransferPlan={id:randomUUID(),hash:'',expiresAt:new Date(Date.now()+15*60000).toISOString(),request,components,dependencies,acceptedIds:automatic.map(c=>c.id),rejectedIds:[],blockers:[],warnings:[]};
   if(dependencies.some(d=>!automatic.some(c=>c.id===d.id)))plan.blockers.push('Cần quyết định các dependency trước khi chuyển.');
   for(const dep of dependencies.filter(d=>!d.selectable))plan.blockers.push(`${dep.displayName}: ${dep.reason}`);
@@ -25,7 +25,7 @@ export class Planner{
  async resolveDependencies(id:string,acceptedIds:string[]){
   const plan=await this.get(id);const roots=plan.components.filter(c=>plan.request.ids.includes(c.id));
   if(acceptedIds.some(id=>!plan.dependencies.some(d=>d.id===id&&d.selectable)))throw new AppError('INVALID_DEPENDENCY','Chỉ được thêm dependency custom unmanaged đã liệt kê.');
-  acceptedIds=[...new Set([...acceptedIds,...plan.dependencies.filter(d=>d.componentType===9&&d.selectable&&d.managed===false).map(d=>d.id)])];
+  acceptedIds=[...new Set([...acceptedIds,...plan.dependencies.filter(d=>d.selectable&&(d.componentType===9&&d.managed===false||d.componentType===10&&d.bundled===true)).map(d=>d.id)])];
   const remaining=selectAfterDecision(roots,plan.dependencies,acceptedIds);
   const relevant=plan.dependencies.filter(d=>d.forIds.some(root=>remaining.some(r=>r.id===root)));
   plan.components=[...remaining,...relevant.filter(d=>acceptedIds.includes(d.id))];

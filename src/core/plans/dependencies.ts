@@ -1,3 +1,4 @@
+import {resolveInternalRelationship,validateBundledRelationship} from './relationships';
 import type {ComponentRef,Dependency,TableMetadata,TransferRequest} from '../../shared/contracts';
 import {label,type CatalogService,type RawTable,type RawColumn} from '../catalog/catalog';
 interface GlobalChoice{MetadataId:string;Name:string;IsGlobal:boolean;IsCustomOptionSet:boolean;IsManaged:boolean;DisplayName?:Parameters<typeof label>[0]}
@@ -22,6 +23,7 @@ export class DependencyReader{
  constructor(private catalog:CatalogService){}
  private async globalChoices(request:TransferRequest){return Promise.all([request.source,request.target].map(env=>this.catalog.client.all<GlobalChoice>(env,'GlobalOptionSetDefinitions?$select=MetadataId,Name,IsGlobal,IsManaged,IsCustomOptionSet,DisplayName')));}
  async required(request:TransferRequest,item:ComponentRef):Promise<ComponentRef[]>{
+  if(item.componentType===10&&item.bundled){await validateBundledRelationship(this.catalog,request,item);return [];}
   if(item.componentType===9){const [src,dst]=await this.globalChoices(request);const choice=src.find(c=>c.MetadataId===item.id);if(!choice||choice.Name!==item.logicalName||!choice.IsGlobal||!choice.IsCustomOptionSet||choice.IsManaged||dst.some(c=>c.Name===choice.Name))throw new AppError('STALE_PLAN','Global Choice đã thay đổi hoặc đã có ở đích. Kiểm tra lại kế hoạch.');return [];}
 
   const {source,target}=request;let snapshot=this.snapshots.get(request);if(!snapshot){snapshot=Promise.all([this.catalog.tables(source),this.catalog.rawTables(target)]).then(([catalog,targetTables])=>({tables:catalog.items,targetTables}));this.snapshots.set(request,snapshot);}const {tables,targetTables}=await snapshot;const ownTable=item.kind==='table'?item.id:request.tableId;
@@ -49,8 +51,9 @@ export class DependencyReader{
    const sourceComponents=await this.catalog.client.all<{componenttype:number}>(source,`solutioncomponents?$select=componenttype&$filter=objectid eq ${id}&$top=1`);
    // Internal non-exportable nodes belong to the platform's component lifecycle.
    // Do not turn them into missing external assets; published dependencies remain checked.
-   if(row.dependencytype===1&&!sourceComponents.length)continue;
+   if(row.dependencytype===1&&!sourceComponents.length&&type!==3)continue;
    if(sourceComponents[0]?.componenttype)type=sourceComponents[0].componenttype;
+   if(type===3){const relation=await resolveInternalRelationship(this.catalog,request,id);if(relation){if(relation.reason!=='EXISTS')resolved.set(relation.id,relation);continue;}}
    if(type===9){const [src,dst]=await this.globalChoices(request);const choice=src.find(c=>c.MetadataId===id);if(choice?.IsGlobal){if(dst.some(c=>c.Name===choice.Name))continue;const selectable=choice.IsCustomOptionSet===true&&choice.IsManaged===false;resolved.set(id,{id,kind:'dependency',componentType:9,logicalName:choice.Name,displayName:'Global Choice · '+label(choice.DisplayName,choice.Name),managed:choice.IsManaged,selectable,...!selectable?{reason:'Global Choice system/managed chưa có ở đích; cần cài Solution cung cấp thành phần này trước.'}:{}});continue;}}
    if(request.kind==='flow'){
     if(type===29){const flow=(await this.catalog.flows(source,target)).items.find(f=>f.id===id);if(flow?.selectable){resolved.set(id,flow);continue;}}
